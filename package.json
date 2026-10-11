@@ -1,0 +1,31 @@
+{
+  "name": "motovisual",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "scrape": "tsx scraper/src/run.ts",
+    "check-data": "tsx scraper/src/checkData.ts",
+    "smoke": "tsx e2e/smoke.ts"
+  },
+  "dependencies": {
+    "fuse.js": "^7.5.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "cheerio": "^1.2.0",
+    "playwright": "^1.64.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "undici": "^8.11.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

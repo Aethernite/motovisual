@@ -1,0 +1,6 @@
+node_modules/
+dist/
+scraper/.cache/
+*.log
+.DS_Store
+e2e/screenshots/
