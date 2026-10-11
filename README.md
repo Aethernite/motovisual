@@ -57,7 +57,7 @@ assembly, <kbd>Esc</kbd> to clear. Every selection is a shareable URL (`#/bike/<
 | `npm run scrape -- <url>` | Scrape a bike into `public/data/`. |
 | `npm run check-data` | Validate the scraped bike files. |
 
-Pushes to `main` deploy to GitHub Pages through `.github/workflows/deploy.yml`. To turn this on, set Settings → Pages → Source to *GitHub Actions*.
+Pushes to `master` deploy to GitHub Pages through `.github/workflows/deploy.yml`. To turn this on, set Settings → Pages → Source to *GitHub Actions*.
 
 ## Data notes
 
