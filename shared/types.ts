@@ -28,6 +28,8 @@ export interface Part {
   qty: number;
   price?: Price;
   buyUrl?: string;
+  /** Stock status reported by the source at scrape time. */
+  inStock?: boolean;
   notes?: string;
 }
 

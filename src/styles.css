@@ -466,6 +466,12 @@ code {
   font-weight: 600;
   color: var(--accent);
 }
+.facts .stock.in {
+  color: #7ee081;
+}
+.facts .stock.out {
+  color: #ff8a8a;
+}
 .actions {
   display: flex;
   flex-wrap: wrap;

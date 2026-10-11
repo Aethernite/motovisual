@@ -8,7 +8,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import type { BikeSummary } from '../../shared/types';
 import { buildBike, slug, upsertIndex, validateBike, type BikeMeta } from './build';
-import { fetchPage, isAllowedByRobots } from './fetch';
+import { fetchPage, readRobots } from './fetch';
 import { parseAssemblyPage, parseModelPage } from './parse';
 
 const DATA_DIR = new URL('../../public/data/', import.meta.url).pathname;
@@ -49,8 +49,11 @@ async function main() {
   if (!make || !model || !year) throw new Error('could not infer make/model/year; pass --make/--model/--year');
   const meta: BikeMeta = { id: values.id ?? slug(`${make} ${model} ${year}`), make, model, year, code, sourceUrl: modelUrl };
 
-  if (!(await isAllowedByRobots(modelUrl))) throw new Error(`robots.txt disallows ${modelUrl}`);
-  const opts = { refresh: values.refresh };
+  const robots = await readRobots(modelUrl);
+  if (!robots.allowed) throw new Error(`robots.txt disallows ${modelUrl}`);
+  const delayMs = Math.max(1000, (robots.crawlDelay ?? 0) * 1000);
+  const opts = { refresh: values.refresh, delayMs };
+  console.log(`Request delay: ${delayMs / 1000}s (robots.txt crawl-delay: ${robots.crawlDelay ?? 'none'})`);
 
   console.log(`Fetching model page ${modelUrl}`);
   const links = parseModelPage(await fetchPage(modelUrl, opts), modelUrl);

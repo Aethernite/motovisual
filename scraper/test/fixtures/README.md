@@ -1,7 +1,5 @@
-These fixtures are **synthetic** HTML written by hand to exercise the parser's
-heuristics (header-driven tables, header-less tables, image-map diagrams).
-They are not copies of the real source site.
-
-When `www.bike-parts-yam.ie` is reachable, save a real model page and one or
-two assembly pages here (`real-model.html`, `real-assembly-*.html`) and add
-assertions for them in `parse.test.ts`.
+- `real-*.html` are **trimmed captures** of bike-parts-yam.ie pages: a few links from
+  the R7 model page, and the diagram plus a few part rows from one assembly page.
+  Session tokens are redacted.
+- `synthetic-*.html` are hand-written and exercise the generic fallbacks: tables with
+  headers, tables without headers, and image-map diagrams.

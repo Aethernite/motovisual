@@ -70,24 +70,31 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<s
   }
 }
 
+export interface RobotsRules {
+  allowed: boolean;
+  /** Crawl-delay in seconds, if the site asks for one. */
+  crawlDelay?: number;
+}
+
 /**
- * Minimal robots.txt check for the `*` user-agent group: returns false if any
- * Disallow prefix matches the URL path.
+ * Minimal robots.txt check for the `*` user-agent group: disallowed if any
+ * Disallow prefix matches the URL path; also reports Crawl-delay.
  */
-export async function isAllowedByRobots(url: string): Promise<boolean> {
+export async function readRobots(url: string): Promise<RobotsRules> {
   const { origin, pathname } = new URL(url);
   let text: string;
   try {
     text = await fetchPage(`${origin}/robots.txt`, { delayMs: 0 });
   } catch (err) {
-    if (err instanceof HttpError && err.status >= 400 && err.status < 500) return true; // no robots.txt → no restrictions
+    if (err instanceof HttpError && err.status >= 400 && err.status < 500) return { allowed: true }; // no robots.txt
     throw err;
   }
-  return robotsAllows(text, pathname);
+  return parseRobots(text, pathname);
 }
 
-export function robotsAllows(robotsTxt: string, path: string): boolean {
+export function parseRobots(robotsTxt: string, path: string): RobotsRules {
   let inStarGroup = false;
+  let crawlDelay: number | undefined;
   const disallowed: string[] = [];
   for (const raw of robotsTxt.split(/\r?\n/)) {
     const line = raw.replace(/#.*/, '').trim();
@@ -96,6 +103,7 @@ export function robotsAllows(robotsTxt: string, path: string): boolean {
     const [, key, value] = m;
     if (/^user-agent$/i.test(key)) inStarGroup = value.trim() === '*';
     else if (inStarGroup && /^disallow$/i.test(key) && value) disallowed.push(value.trim());
+    else if (inStarGroup && /^crawl-delay$/i.test(key) && Number(value) > 0) crawlDelay = Number(value);
   }
-  return !disallowed.some((prefix) => path.startsWith(prefix));
+  return { allowed: !disallowed.some((prefix) => path.startsWith(prefix)), crawlDelay };
 }

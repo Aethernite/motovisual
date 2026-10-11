@@ -9,6 +9,18 @@ import type { Price } from '../../shared/types';
 /** Yamaha part numbers: 1WD-14710-00-00, 90105-08X00-00, B7N-2510A-00 … */
 export const PART_NO_RE = /\b[0-9A-Z]{3,5}-[0-9A-Z]{5}-[0-9A-Z]{2}(?:-[0-9A-Z]{2})?\b/;
 
+/**
+ * Yamaha part numbers are often printed without dashes (918081602300).
+ * Standard hardware (5 leading digits) is 5-5-2; model parts are 3-5-2-2.
+ */
+export function formatPartNo(raw: string): string {
+  const s = raw.replace(/[\s-]/g, '').toUpperCase();
+  if (s.length !== 12) return raw.trim();
+  return /^\d{5}/.test(s)
+    ? `${s.slice(0, 5)}-${s.slice(5, 10)}-${s.slice(10)}`
+    : `${s.slice(0, 3)}-${s.slice(3, 8)}-${s.slice(8, 10)}-${s.slice(10)}`;
+}
+
 export interface AssemblyLink {
   name: string;
   url: string;
@@ -21,6 +33,7 @@ export interface ParsedPart {
   qty: number;
   price?: Price;
   buyUrl?: string;
+  inStock?: boolean;
 }
 
 export interface ParsedAssembly {
@@ -31,14 +44,24 @@ export interface ParsedAssembly {
 const clean = (s: string) => s.replace(/\s+/g, ' ').trim();
 
 /**
- * Model page → assembly links. Assembly pages live one or more path segments
- * below the model URL, so any same-origin link that extends the model path is
- * treated as an assembly.
+ * Model page → assembly links. Two URL shapes are recognised:
+ *  - bike-parts-yam.ie: `/…/YZF690/<NAME>/<catalog>/<nn>/0/<modelId>`, i.e.
+ *    same prefix up to the model code and ending in the model id;
+ *  - generic: any link that extends the model path.
  */
 export function parseModelPage(html: string, modelUrl: string): AssemblyLink[] {
   const $ = cheerio.load(html);
   const base = new URL(modelUrl);
   const basePath = base.pathname.replace(/\/+$/, '');
+  const baseSegs = basePath.split('/').filter(Boolean);
+  const modelId = baseSegs[baseSegs.length - 1];
+  const parentPath = '/' + baseSegs.slice(0, -1).join('/') + '/';
+  const isAssemblyPath = (path: string) => {
+    const p = path.replace(/\/+$/, '');
+    if (p.startsWith(basePath + '/')) return true;
+    const segs = p.split('/').filter(Boolean);
+    return segs.length > baseSegs.length && p.startsWith(parentPath) && segs[segs.length - 1] === modelId;
+  };
   const seen = new Map<string, AssemblyLink>();
 
   $('a[href]').each((_, el) => {
@@ -51,12 +74,12 @@ export function parseModelPage(html: string, modelUrl: string): AssemblyLink[] {
     }
     url.hash = '';
     if (url.origin !== base.origin) return;
-    if (!url.pathname.startsWith(basePath + '/')) return;
+    if (!isAssemblyPath(url.pathname)) return;
 
     const $a = $(el);
     const name = clean(
       $a.attr('title') || $a.text() || $a.find('img').attr('alt') || $a.find('img').attr('title') || '',
-    );
+    ).replace(/\s+for\s+\S+.*$/i, ''); // "CYLINDER HEAD for Yamaha YZF-R7 2022" → "CYLINDER HEAD"
     const key = url.toString();
     const existing = seen.get(key);
     // The same assembly is often linked twice (thumbnail + caption); keep the best name.
@@ -65,8 +88,15 @@ export function parseModelPage(html: string, modelUrl: string): AssemblyLink[] {
 
   return [...seen.values()].map((a) => ({
     ...a,
-    name: a.name || decodeURIComponent(a.url.split('/').filter(Boolean).pop() ?? '').replace(/[-_]+/g, ' '),
+    name: a.name || nameFromPath(new URL(a.url).pathname, baseSegs),
   }));
+}
+
+/** Fallback name: the first path segment that differs from the model URL, de-slugged. */
+function nameFromPath(path: string, baseSegs: string[]): string {
+  const segs = path.split('/').filter(Boolean);
+  const seg = segs.find((s, i) => s !== baseSegs[i]) ?? '';
+  return decodeURIComponent(seg).replace(/--/g, ' / ').replace(/[-_]+/g, ' ');
 }
 
 /** "€1,234.56", "12,34 €", "EUR 9.90" → Price */
@@ -111,6 +141,9 @@ function headerMap(headers: string[]): Partial<Record<Column, number>> {
 
 function pickDiagram($: cheerio.CheerioAPI, pageUrl: string): string | undefined {
   const abs = (src?: string) => (src ? new URL(src, pageUrl).toString() : undefined);
+  // 0. bike-parts-yam.ie's microfiche image.
+  const fiche = $('#img_microfiche_img').attr('src');
+  if (fiche) return abs(fiche);
   // 1. An image driving an image map (clickable diagram hotspots).
   const mapped = $('img[usemap]').first().attr('src');
   if (mapped) return abs(mapped);
@@ -126,9 +159,40 @@ function pickDiagram($: cheerio.CheerioAPI, pageUrl: string): string | undefined
   return abs(hinted);
 }
 
+/**
+ * schema.org Product microdata, as used by bike-parts-yam.ie: one
+ * `[itemtype=…/Product]` block per diagram row.
+ */
+function parseMicrodata($: cheerio.CheerioAPI, pageUrl: string): ParsedPart[] {
+  const parts: ParsedPart[] = [];
+  $('[itemtype$="schema.org/Product"]').each((_, el) => {
+    const $p = $(el);
+    const mpn = clean($p.find('[itemprop="mpn"]').first().text()) || $p.find('meta[itemprop="mpn"]').attr('content');
+    if (!mpn) return;
+    const priceEl = $p.find('[itemprop="price"]').first();
+    const amount = Number(priceEl.attr('content'));
+    const currency = $p.find('[itemprop="priceCurrency"]').attr('content') ?? 'EUR';
+    const url = $p.find('link[itemprop="url"]').attr('href') ?? $p.find('a[href]').first().attr('href');
+    const availability = $p.find('[itemprop="availability"]').attr('href');
+    const qty = Number($p.find('input.JS_qte_table, input[name*="qte"]').attr('value'));
+    parts.push({
+      ref: clean($p.find('.ref-libelle').first().text()),
+      partNo: formatPartNo(mpn),
+      description: clean($p.find('span[itemprop="name"], [itemprop="name"]:not(meta)').first().text()).replace(/,\s+/g, ', '),
+      qty: Number.isFinite(qty) && qty > 0 ? qty : 1,
+      price: Number.isFinite(amount) && amount > 0 ? { amount, currency } : priceEl.length ? parsePrice(priceEl.text()) : undefined,
+      buyUrl: url ? new URL(url, pageUrl).toString() : undefined,
+      inStock: availability ? /InStock/i.test(availability) : undefined,
+    });
+  });
+  return parts;
+}
+
 /** Assembly page → diagram image + parts rows. */
 export function parseAssemblyPage(html: string, pageUrl: string): ParsedAssembly {
   const $ = cheerio.load(html);
+  const micro = parseMicrodata($, pageUrl);
+  if (micro.length) return { diagramUrl: pickDiagram($, pageUrl), parts: micro };
   const parts: ParsedPart[] = [];
 
   $('table').each((_, table) => {

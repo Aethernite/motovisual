@@ -60,6 +60,10 @@ export class DetailPanel {
         { class: 'facts' },
         h('dt', {}, 'Price'),
         h('dd', { class: 'price' }, formatPrice(part.price)),
+        part.inStock !== undefined ? h('dt', {}, 'Stock') : null,
+        part.inStock !== undefined
+          ? h('dd', { class: part.inStock ? 'stock in' : 'stock out' }, part.inStock ? 'In stock' : 'Out of stock')
+          : null,
         h('dt', {}, 'Diagram ref'),
         h('dd', {}, part.ref || '—'),
         h('dt', {}, 'Qty per bike'),

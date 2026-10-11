@@ -26,13 +26,12 @@ npm run check-data   # sanity-check every bike file
 ```
 
 - Make, model, year and code are inferred from the URL. Override them with `--make`, `--model`, `--year`, `--code` and `--id`.
-- The scraper honours `robots.txt`, makes at most 1 request per second and caches pages in `scraper/.cache/`. Re-runs are free; pass `--refresh` to re-download.
+- The scraper honours `robots.txt`, including its `Crawl-delay` (at least 1 second between requests), and caches pages in `scraper/.cache/`. Re-runs are free; pass `--refresh` to re-download.
 - Commit the generated JSON under `public/data/`.
 
-> **Status:** the parser in `scraper/src/parse.ts` has only been tested against
-> hand-written HTML fixtures so far, because the source site wasn't reachable
-> from the build environment. Run it against the real site, and if any field
-> comes out empty, add a saved real page to `scraper/test/fixtures/` and adjust the parser.
+- **Included:** `public/data/bikes/yamaha-r7-2022.json`, scraped on 2026-10-11: 49 assemblies and 1,267 parts, all with prices and diagrams.
+- The parser reads bike-parts-yam.ie's schema.org Product microdata. Trimmed real pages are in `scraper/test/fixtures/real-*.html`.
+- The scraper uses the site's `Crawl-delay: 5`, so a full bike takes about 4 minutes.
 
 ## How the 3D view works
 
